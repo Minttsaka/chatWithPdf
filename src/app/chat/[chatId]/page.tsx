@@ -8,7 +8,6 @@ import { auth } from "@clerk/nextjs";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import React from "react";
-import ChatMobileSideBar from "@/components/ChatMobileSideBar";
 
 type Props = {
   params: {
@@ -47,9 +46,6 @@ const ChatPage = async ({ params: { chatId } }: Props) => {
         </div>
         {/* chat component */}
         <div className="flex-[3] border-l-4 border-l-slate-200 oveflow-scroll no-scrollbar">
-          <div className={`${isOpen?'block':'hidden'} md:hidden z-50 fixed top-0 left-0 bottom-0 right-[30%]`}>
-            <ChatMobileSideBar chats={_chats} chatId={parseInt(chatId)} isPro={isPro} />
-          </div>
           <ChatComponent chatId={parseInt(chatId)} />
         </div>
       </div>
