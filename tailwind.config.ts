@@ -74,6 +74,11 @@ const config = {
       },
     },
   },
+  variants: {
+    extend: {
+      display: ['responsive'],
+    },
+  },
   plugins: [require("tailwindcss-animate")],
 } satisfies Config
 

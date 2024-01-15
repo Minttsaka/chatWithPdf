@@ -1,7 +1,10 @@
-import {PineconeClient} from "@pinecone-database/pinecone"
+import {PineconeClient, Vector, utils as PineconeUtils} from "@pinecone-database/pinecone"
 import { downloadFromS3 } from "./s3-server"
 import {PDFLoader} from 'langchain/document_loaders/fs/pdf'
 import {Document, RecursiveCharacterTextSplitter} from '@pinecone-database/doc-splitter'
+import { getEmbeddings } from "./embeddings"
+import md5 from 'md5'
+import { convertToAscii } from "./utils"
 
 
 let pinecone:PineconeClient | null =null
@@ -43,7 +46,39 @@ export async function loadS3IntoPinecone(fileKey:string){
     const documents=await Promise.all(pages.map(prepareDocument))
 
     //vectorise and embed in individual documents
+    const vectors=await Promise.all(documents.flat().map(embedDocument))
+
+    //upload to pinecone
+    const client=await getPineconeClient()
+    const pineconeIndex=client.Index('chatpdf-yt')
+
+    console.log('inserting vectors into pinecone')
+
+    const namespace=convertToAscii(fileKey)
+    PineconeUtils.chunkedUpsert(pineconeIndex,vectors,namespace,10)
+
+    return documents[0]
     
+}
+
+async function embedDocument(doc:Document) {
+    try{
+        const embeddings=await getEmbeddings(doc.pageContent)
+        console.log('here is the doc from embedDocument fn', doc)
+        const hash=md5(doc.pageContent)
+
+        return {
+            id:hash,
+            values:embeddings,
+            metadata:{
+                text:doc.metadata.text,
+                pageNumber:doc.metadata.pageNumber
+            }
+        } as Vector
+    }catch(error){
+        console.log('error embedding document', error)
+        throw error
+    }
 }
 
 export const truncateStringByBytes=(str:string,bytes:number)=>{
@@ -52,17 +87,20 @@ export const truncateStringByBytes=(str:string,bytes:number)=>{
 }
 
 async function prepareDocument(page:PDFpage) {
-  let [pageContent,metadata]=page
+  let {pageContent,metadata}=page
   pageContent=pageContent.replace(/\n/g,'') 
   
   const splitter=new RecursiveCharacterTextSplitter()
-    new Document({
-        pageContent,
-        metadata:{
-            pageNumber:metadata.loc.pageNumber,
-            text:truncateStringByBytes(pageContent,36000)
-        }
-    })
+  const docs=await splitter.splitDocuments([
+     new Document({
+          pageContent,
+          metadata: {
+              pageNumber: metadata.loc.pageNumber,
+              text: truncateStringByBytes(pageContent, 36000),
+          },
+      })
+    ])
+    
 
     return docs
 }
